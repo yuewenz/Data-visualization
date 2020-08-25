@@ -1,0 +1,256 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <script src="../lib/d3.v5.min.js"></script>
+    <script src="../lib/d3-dsv.min.js"></script>
+    <script src="../lib/d3-fetch.min.js"></script>
+    <script src="../lib/d3-scale-chromatic.v1.min.js"></script>
+    <script src="../lib/topojson.v2.min.js"></script>
+    <title>Q4</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        #line {
+            width: 970px;
+            height: 500px;
+            margin: 0 auto;
+        }
+
+        #bar {
+            width: 970px;
+            height: 500px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        #t2 {
+            display: none;
+        }
+    </style>
+
+</head>
+<body>
+    <h1 id="t1">Us Earthquakes by Region 2011-2015</h1>
+    <div id="line"></div>
+    <h1 id="t2">Western Region Earthquakes 2012</h1>
+    <div id="bar"></div>
+    <script>
+
+
+        var datas = [];
+        d3.csv("state-year-earthquakes.csv").then(function (d) {
+            datas = d;
+            drawLine(datas);
+        });
+
+        function drawLine(data) {
+            var years = [];
+            var regions = [];
+            var states = [];
+            for (var i = 0; i < data.length; i++) {
+                if (years.indexOf(data[i].year) == -1) {
+                    years.push(data[i].year);
+                }
+                if (regions.indexOf(data[i].region) == -1) {
+                    regions.push(data[i].region);
+                }
+                if (states.indexOf(data[i].state) == -1) {
+                    states.push(data[i].state);
+                }
+            }
+
+            years.sort((y1, y2) => { y1 - y2 });
+
+            var allData = [];
+            for (var i = 0; i < regions.length; i++) {
+                var obj = { name: regions[i], values: [] };
+                for (var j = 0; j < years.length; j++) {
+                    obj.values.push({ name: years[j], value: 0 });
+                }
+                allData.push(obj);
+            }
+
+            for (var i = 0; i < data.length; i++) {
+                for (var j = 0; j < allData.length; j++) {
+                    for (var k = 0; k < allData[j].values.length; k++) {
+                        if (allData[j].name == data[i].region && allData[j].values[k].name == data[i].year) {
+                            allData[j].values[k].value += Number(data[i].count);
+                        }
+                    }
+                }
+            }
+
+            var maxValue = 0
+            for (var i = 0; i < allData.length; i++) {
+                for (var j = 0; j < allData[i].values.length; j++) {
+                    if (maxValue < allData[i].values[j].value) {
+                        maxValue = allData[i].values[j].value;
+                    }
+                }
+            }
+
+            var margin = { top: 20, right: 100, bottom: 30, left: 60 },
+                width = 900 - margin.left - margin.right,
+                height = 450 - margin.top - margin.bottom;
+
+            var colors = ["blue", "orange", "green", "red"];
+
+            var xScale = d3.scalePoint()
+                .domain(years)
+                .range([0, width]);
+
+            var yScale = d3.scaleLinear()
+                .domain([0, 1.2*maxValue])
+                .range([height, 0]);
+
+            var svg = d3.select("#line")
+                .append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+            var xAsix = svg.append("g")
+                .attr("transform", "translate(50," + height + ")")
+                .call(d3.axisBottom(xScale));
+
+            var yAsix = svg.append("g")
+                .attr("transform", "translate(50,0)")
+                .call(d3.axisLeft(yScale));
+
+            allData.forEach(function (data, i) {
+                line = d3.line()
+                    .x(d => xScale(d.name))
+                    .y(d => yScale(d.value))
+                svg.append("path")
+                    .attr("transform", "translate(50,0)")
+                    .datum(data.values)
+                    .attr("d", line)
+                    .style("stroke", function () { return colors[i] })
+                    .style("fill", "none")
+
+
+                svg.selectAll(".c")
+                    .data(data.values)
+                    .enter()
+                    .append("circle")
+                    .attr("transform", "translate(50,0)")
+                    .attr("cx", d => xScale(d.name))
+                    .attr("cy", d => yScale(d.value))
+                    .attr("r", 4)
+                    .style("fill", function () { return colors[i]; })
+                    .on("mouseover", function (d) {
+                        document.getElementById("t2").style.display = "block";
+                        document.getElementById("t2").innerHTML = data.name + "Region Earthquakes " + d.name;
+                        d3.select(this).attr("r", 9);
+                        drawBar(data.name, d.name)
+                    })
+                    .on("mouseout", function (d) {
+                        document.getElementById("t2").style.display = "none";
+                        d3.select(this)
+                            .attr("r", 4);
+                        document.getElementById("bar").innerHTML = "";
+                    })
+            })
+
+            svg.selectAll(".point")
+                .append("g")
+                .data(regions)
+                .enter()
+                .append('circle')
+                .attr('cx', 810)
+                .attr('r', 6)
+                .attr('cy', function (d, i) { return i * 20 + 12; })
+                .attr('fill', function (d, i) { return colors[i] });
+
+            svg.selectAll(".text")
+                .append("g")
+                .data(regions)
+                .enter()
+                .append('text')
+                .attr('x', 820)
+                .attr('y', function (d, i) { return (i * 20) + 17; })
+                .text(function (d) { return d; });
+
+          svg.append("text")
+            .attr("x", width/2)
+            .attr("y", 15)
+            .attr("text-anchor", "middle")
+            .text("yzheng420")
+            .style("font-size", 16)
+            .style("font-weight", "bold");
+        }
+
+        function drawBar(thisRegion, thisYear) {
+            document.getElementById("bar").innerHTML = "";
+            var margin = { top: 20, right: 100, bottom: 30, left: 70 },
+                width = 900 - margin.left - margin.right,
+                height = 750 - margin.top - margin.bottom;
+
+            var svg = d3.select("#bar")
+                .append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
+
+            var States = [];
+
+            datafiltered = datas.filter(state => state.region == thisRegion && state.year == thisYear);
+            var barDatas = [];
+            for (var i = 0; i < datafiltered.length; i++) {
+                barDatas.push({ name: datafiltered[i].state, value: datafiltered[i].count });
+            }
+            barDatas.sort(function (state1, state2) {
+                return state2.value - state1.value;
+            })
+
+            var maxCount = 0
+            for (var i = 0; i < barDatas.length; i++) {
+                States.push(barDatas[i].name);
+                if (maxCount < Number(barDatas[i].value)) {
+                    maxCount = Number(barDatas[i].value);
+                }
+            }
+
+            var xScale = d3.scaleLinear()
+                .range([0, width])
+                .domain([0, maxCount])
+
+            var yScale = d3.scaleBand()
+                .domain(States)
+                .range([0, 500])
+                .padding(0.1);
+
+            svg.append("g")
+                .attr("transform", "translate(80,0)")
+                .call(d3.axisLeft(yScale));
+
+            svg.append("g")
+                .attr("transform", "translate(80,500)")
+                .call(d3.axisBottom(xScale)
+                    .ticks(6)
+                    .tickSizeInner(-500))
+
+            svg.selectAll(".b")
+                .data(barDatas)
+                .enter()
+                .append("g")
+                .append("rect")
+                .attr("transform", "translate(81,0)")
+                .attr("x", 0)
+                .attr("y", function (d) { return yScale(d.name); })
+                .attr("height", height / barDatas.length - 25)
+                .attr("width", function (d) { return xScale(d.value); })
+                .style("fill", "#5382b0");
+        }
+
+
+    </script>
+</body>
+</html>

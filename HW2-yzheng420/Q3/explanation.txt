@@ -1,0 +1,2 @@
+If the y value is large enough, nonliner scales can help the graph become more visible and easier to observe it difference in the graph.
+When the y value is small and hard to be visible, the log or square root could help the data to be seen easier and more sperated in the graph.

@@ -1,0 +1,194 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Q6</title>
+    <script src="../lib/d3.v5.min.js"></script>
+    <script src="../lib/d3-tip.min.js"></script>
+    <script src="../lib/topojson.v2.min.js"></script>
+    <script src="../lib/d3-simple-slider.min.js"></script>
+    <style type="text/css">
+
+        .states {
+            fill: none;
+            stroke: #fff;
+            stroke-linejoin: round;
+        }
+
+
+        .tooltip {
+            background: #2c5b22;
+            color: #fff;
+            z-index: 99;
+        }
+
+        #title {
+            width: 100px;
+            float: left;
+            text-align: center;
+            font-weight: bolder;
+            margin-top: 20px;
+        }
+
+        #slider {
+            float: left;
+        }
+    </style>
+</head>
+<body>
+    <div id="title">Year</div>
+    <div id="slider">
+        <div><div id="sliderYear"></div></div>
+    </div>
+    <div id="map"></div>
+    <script>
+        //load slidbar
+        var slider = d3
+            .sliderBottom()
+            .min(new Date(2010, 01, 01))
+            .max(new Date(2015, 01, 01))
+            .step(1000 * 60 * 60 * 24 * 365)
+            .width(400)
+            .tickFormat(d3.timeFormat('%Y'))
+            .tickValues(d3.range(0, 6).map(function (d) {
+                return new Date(2010 + d, 01, 01);
+            }))
+            .default(new Date(2010, 01, 01))
+            .on('onchange', val => {
+                updateMap(d3.timeFormat('%Y')(val));
+            });
+
+        d3.select('#sliderYear')
+            .append('svg')
+            .attr('width', 500)
+            .attr('height', 120)
+            .append('g')
+            .attr('transform', 'translate(30,30)')
+            .call(slider);
+
+        var margin = { top: 50, right: 50, bottom: 50, left: 50 },
+            width = 1200 - margin.left - margin.right,
+            height = 600 - margin.top - margin.bottom;
+
+        //variable
+        var legendRect, legendText, mapPath;
+
+        Promise.all([d3.json("states-10m.json"), d3.csv("state-earthquakes.csv")]).then(function (data) {
+            //load data
+            var dataObj = {};
+            var regionObj = {};
+            for (var i = 0; i < data[1].length; i++) {
+                dataObj[data[1][i].States] = data[1][i]["2010"];
+                regionObj[data[1][i].States] = data[1][i]["Region"];
+            }
+            data[0] = topojson.feature(data[0], data[0].objects.states)
+            data[0].features = data[0].features.map(d => {
+                d.properties.region = regionObj[d.properties.name];
+                d.properties.number = dataObj[d.properties.name];
+                return d;
+            });
+
+            //create svg
+            var svg = d3.select("#map")
+                .append("svg")
+                .attr("width", width)
+                .attr("height", height)
+                .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+            var max = d3.max(data[0].features, d => Number(d.properties["number"]));
+            var min = d3.min(data[0].features, d => Number(d.properties["number"]));
+
+            var numberRange = [];
+            for (var i = 0; i < 9; i++) {
+                numberRange.push(Math.ceil(Math.exp((Math.log(max - min) / 9) * (i))));
+            }
+
+            var scaleColors = d3.scaleThreshold()
+                .domain(numberRange)
+                .range(d3.schemeReds[9]);
+
+            var tooltip = d3.tip()
+                .attr("class", "tooltip")
+                .html(function (d, i) {
+                    return "State: " + d.properties.name + "<br>" + "Region: " + d.properties.region + "<br>" + "Year:" + "2010" + "<br>" + "Earthquakes:" + d.properties.number;
+                });
+            svg.call(tooltip);
+
+            mapPath = svg.selectAll("path")
+                .data(data[0].features)
+                .enter()
+                .append("path")
+                .attr("stroke", "black")
+                .attr("d", d3.geoPath().projection(d3.geoAlbersUsa().scale(820).translate([400, 200])))
+                .attr("fill", function (d) {
+                    return scaleColors(d.properties.number);
+                })
+                .on("mouseover", tooltip.show)
+                .on("mouseout", tooltip.hide);
+
+            //legend
+            legendRect = svg.selectAll("rect")
+                .data(scaleColors.range())
+                .enter()
+                .append("rect")
+                .attr("x", 800)
+                .attr("y", function (d, i) { return 20 * i; })
+                .attr("width", 30)
+                .attr("height", 15)
+                .attr("fill", function (d) { return d; });
+
+
+            legendText = svg.selectAll()
+                .data(numberRange)
+                .enter()
+                .append("text")
+                .text(function (d) { return d; })
+                .attr("x", 840)
+                .attr("y", function (d, i) { return 20 * i + 15 });
+
+            svg.append("text")
+                .attr("x", 700)
+                .attr("y", 450)
+                .text("yzheng420")
+        });
+
+
+        function updateMap(year) {
+            Promise.all([d3.json("states-10m.json"), d3.csv("state-earthquakes.csv")]).then(function (data) {
+                //load datas
+                var dataObj = {};
+                var regionObj = {};
+                for (var i = 0; i < data[1].length; i++) {
+                    dataObj[data[1][i].States] = data[1][i][year];
+                    regionObj[data[1][i].States] = data[1][i]["Region"];
+                }
+                data[0] = topojson.feature(data[0], data[0].objects.states)
+                data[0].features = data[0].features.map(d => {
+                    d.properties.region = regionObj[d.properties.name];
+                    d.properties.number = dataObj[d.properties.name];
+                    return d;
+                });
+
+                var max = d3.max(data[0].features, d => Number(d.properties["number"]));
+                var min = d3.min(data[0].features, d => Number(d.properties["number"]));
+
+                var numberRange = [];
+                for (var i = 0; i < 9; i++) {
+                    numberRange.push(Math.ceil(Math.exp((Math.log(max - min) / 9) * (i))));
+                }
+
+                var scaleColors = d3.scaleThreshold()
+                    .domain(numberRange)
+                    .range(d3.schemeReds[9]);
+
+                mapPath.data(data[0].features).attr("fill", function (d) {
+                    return scaleColors(d.properties.number);
+                });
+
+                legendRect.data(scaleColors.range()).attr("fill", function (d) { return d; });
+                legendText.data(numberRange).text(function (d) { return d; })
+            });
+        }
+    </script>
+</body>
+</html>

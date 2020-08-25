@@ -1,0 +1,209 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title></title>
+    <script src="../lib/d3.v5.min.js"></script>
+    <script src="../lib/d3-dsv.min.js"></script>
+    <script src="../lib/d3-fetch.min.js"></script>
+    <script src="../lib/d3-scale-chromatic.v1.min.js"></script>
+    <script src="../lib/topojson.v2.min.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        #chart {
+            height: 600px;
+            width: 900px;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <label>Select Year</label>
+    <select id="year">
+        <option value="2017">2017</option>
+        <option value="2018">2018</option>
+    </select>
+    <div id="chart"></div>
+
+    <script>
+
+        document.getElementById("year").onchange = function () {
+            year = this.value;
+            draw();
+        };
+
+        var data1 = [];
+        var data2 = [];
+        var year = "2017";
+
+
+
+        // Parse the Data
+        draw();
+        function draw() {
+            document.getElementById("chart").innerHTML = "";
+            // set the dimensions and margins of the graph
+            var margin = { top: 50, right: 30, bottom: 50, left: 50 },
+                width = 860 - margin.left - margin.right,
+                height = 500 - margin.top - margin.bottom;
+
+            // append the svg object to the body of the page
+            var svg = d3.select("#chart")
+                .append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform",
+                    "translate(" + margin.left + "," + margin.top + ")");
+            d3.csv("earthquake.csv").then(function (datas) {
+                var max = 0;
+                var data = [];
+                if (year == "2017") {
+                    data = datas.filter(function (d, i) {
+                        return d.Year == "2017";
+                    });
+                } else {
+                    data = datas.filter(function (d, i) {
+                        return d.Year == "2018";
+                    });
+                }
+
+                for (var i = 0; i < data.length; i++) {
+                    if ((Number(data[i]["5_5.9"]) + Number(data[i]["6_6.9"]) + Number(data[i]["7.0+"])) > max) {
+                        max = (Number(data[i]["5_5.9"]) + Number(data[i]["6_6.9"]) + Number(data[i]["7.0+"]));
+                    }
+                }
+
+                // List of subgroups = header of the csv files = soil condition here
+                var subgroups = ["7.0+", "6_6.9", "5_5.9"];
+                var myColor = ['#b33040', '#d25c4d', '#f2b447'];
+                // List of groups = species here = value of the first column called State -> I show them on the X axis
+                var groups = d3.map(data, function (d) { return (d.State) }).keys()
+
+                // Add X axis
+                var x = d3.scaleBand()
+                    .domain(groups)
+                    .range([0, width])
+                    .padding([0.2]);
+
+                svg.append("g")
+                    .attr("transform", "translate(0," + height + ")")
+                    .call(d3.axisBottom(x).tickSizeOuter(0));
+                console.log(data);
+                // Add Y axis
+                var y = d3.scaleLinear()
+                    .domain([0, max])
+                    .range([height, 0]);
+
+                svg.append("g")
+                    .call(d3.axisLeft(y));
+
+                // color palette = one color per subgroup
+                var color = d3.scaleOrdinal()
+                    .domain(subgroups)
+                    .range(myColor)
+
+                var stackedData = [];
+                for (var i = 0; i < subgroups.length; i++) {
+                    stackedData.push([]);
+
+                    for (var j = 0; j < data.length; j++) {
+                        if (i == 0) {
+                            var arr = [0, Number(data[j][subgroups[i]])];
+                        } else {
+                            var arr = [stackedData[i - 1][j][1], Number(data[j][subgroups[i]]) + stackedData[i - 1][j][1]];
+                        }
+                        arr["data"] = data[j];
+                        stackedData[i].push(arr);
+                    }
+                    stackedData[i]["key"] = subgroups[i];
+                    stackedData[i]["index"] = i;
+                }
+
+                // Show the bars
+                svg.append("g")
+                    .selectAll("g")
+                    // Enter in the stack data = loop key per key = State per State
+                    .data(stackedData)
+                    .enter().append("g")
+                    .attr("fill", function (d) { return color(d.key); })
+                    .selectAll("rect")
+                    // enter a second time = loop subgroup per subgroup to add all rectangles
+                    .data(function (d, i) {
+                        return d;
+                    })
+                    .enter()
+                    .append("rect")
+                    .attr("x", function (d) { return x(d.data.State); })
+                    .attr("y", function (d) { return y(d[1]); })
+                    .attr("height", function (d) { return y(d[0]) - y(d[1]); })
+                    .attr("width", x.bandwidth());
+
+                svg.append("g")
+                    .selectAll(".leng")
+                    .data(subgroups)
+                    .enter()
+                    .append("circle")
+                    .attr("transform", function (d, i) {
+                        return "translate(720," + 30 * i + ")";
+                    })
+                    .attr("r", 7)
+                    .attr("fill", function (d, i) {
+                        return myColor[i];
+                    })
+
+                svg.append("g")
+                    .selectAll(".leng")
+                    .data(subgroups)
+                    .enter()
+                    .append("text")
+                    .attr("transform", function (d, i) {
+                        return "translate(740," + (30 * i + 5) + ")";
+                    })
+                    .text(function (d, i) {
+                        return subgroups[i];
+                    })
+
+                svg.append("g")
+                    .selectAll(".leng")
+                    .data(data)
+                    .enter()
+                    .append("text")
+                    .attr("x", function (d) { return x(d.State) + 25; })
+                    .attr("y", function (d) { return y(Number(d["7.0+"]) + Number(d["6_6.9"]) + Number(d["5_5.9"])) - 5; })
+                    .text(function (d, i) {
+                        return Number(data[i]["7.0+"]) + Number(data[i]["6_6.9"]) + Number(data[i]["5_5.9"]);
+                    })
+
+                svg.append("g").append("text")
+                    .attr("transform", "translate(400,450)")
+                    .text("State");
+
+                svg.append("g").append("text")
+                    .attr("transform", "translate(300,-10)")
+                    .text("Visualizing Earthquake Counts by State");
+
+                svg.append('text')
+                .attr("x", width-10)
+                .attr("y", height+40)
+                .attr("text-anchor","middle")
+                .attr("front-size",100)
+                .text('yzheng420')
+
+                svg.append("g").append("text")
+                    .attr("y", -35)
+                    .attr("x", -300)
+                    .attr("transform", "rotate(-90)")
+                    .text("Number of Earthquakes");
+
+            })
+        }
+
+    </script>
+</body>
+</html>
